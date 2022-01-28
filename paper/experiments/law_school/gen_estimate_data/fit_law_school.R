@@ -3,7 +3,7 @@ library(dplyr)
 library(caret)
 library(rstan)
 
-raw_data = read.csv("vignettes/law_school/law_data.csv")
+raw_data = read.csv("paper/experiments/law_school/law_data.csv")
 law = dplyr::select(raw_data, race, sex, LSAT, UGPA, region_first, ZFYA, sander_index, first_pf) 
 law = law[law$region_first != "PO",]
 law$region_first = factor(law$region_first)
@@ -42,7 +42,7 @@ law_stan_train = list(N = n, K = length(sense_cols), a = data.matrix(lawTrain[,s
                           ugpa = lawTrain[,c("UGPA")], lsat = lawTrain[,c("LSAT")], zfya = lawTrain[,c("ZFYA")])
 
 
-fit_law_train = stan(file = 'vignettes/law_school_train.stan', data = law_stan_train, iter = 2000, chains = 1, verbose = TRUE)
+fit_law_train = stan(file = 'paper/experiments/law_school_train.stan', data = law_stan_train, iter = 2000, chains = 1, verbose = TRUE)
 # Extract information
 la_law_train = extract(fit_law_train, permuted = TRUE)
 
@@ -50,7 +50,7 @@ saveRDS(la_law_train, "vignettes/la_law_train.rds")
 
 
 ## Read saved extracted values
-la_law_train = readRDS("vignettes/law_school/la_law_train.rds")
+la_law_train = readRDS("paper/experiments/law_school/la_law_train.rds")
 coefficients = list(
     ugpa0      = mean(la_law_train$ugpa0),
     eta_u_ugpa = mean(la_law_train$eta_u_ugpa),
@@ -65,4 +65,4 @@ coefficients = list(
     race_sex = prop.table(table(lawTrain$race, lawTrain$sex))
 )
 
-saveRDS(coefficients, "vignettes/law_school/la_law_coef.rds")
+saveRDS(coefficients, "paper/experiments/law_school/la_law_coef.rds")

@@ -1,6 +1,6 @@
 generate_law_school = function(n, race = NULL, sex = NULL, seed = 123L) {
     # read in coefficients
-    attach(readRDS("vignettes/law_school/la_law_coef.rds"), pos = 2L, name = "coefs")
+    attach(readRDS("paper/experiments/law_school/la_law_coef.rds"), pos = 2L, name = "coefs")
     on.exit(detach("coefs"))
 
     # Set seed 
@@ -54,11 +54,18 @@ binarize_a = function(race, sex) {
 }
 
 generate_cf_law_school_sex = function(data, seed = 123L) {
-    generate_law_school(nrow(data), sex = 3 - as.integer(data$sex), seed = seed)
+    sexes = levels(data$sex)
+    X = generate_law_school(nrow(data), sex = 3 - as.integer(data$sex), seed = seed)
+    levels(X$sex) = sexes
+    return(X)
 }
 
-generate_cf_law_school_race = function(data, seed = 123L) {
-    races = unique(data$race)
+generate_cf_law_school_race = function(data, seed = 123L, target_race = NULL) {
+    set.seed(seed)
+    races = levels(data$race)
     race = sapply(data$race, function(ro) sample(setdiff(races, ro), 1))
-    generate_law_school(nrow(data), race = race, seed = seed)
+    if (!is.null(target_race)) race = rep(target_race, nrow(data))
+    X = generate_law_school(nrow(data), race = race, seed = seed)
+    levels(X$race) = races
+    return(X)
 }

@@ -28,30 +28,42 @@ make_fitness_function_cf = function(predictor, predictor_protected, x_interest, 
   }
 }
 
-plot_counterfactuals = function(cfactuals, data) {
-    library("ggplot2")
-    require_namespaces("Rtsne")
-    setDT(data)
-    data[, role := "data"]
-    
-    cdf = cfactuals$data[, role := "counterfactuals"]
-    idf = cfactuals$x_interest[, role := "x_interest"]
-    df = rbind(cdf, idf, data[, colnames(cdf), with = FALSE])
-    df = unique(df)
-    X = model.matrix( ~ ., data = df)
-    X = Rtsne::normalize_input(X)
-    rtdf = Rtsne::Rtsne(X)$Y
-    edf = cbind(data.frame(rtdf), df[, "role", with = FALSE])
 
-    ggplot(edf, aes(x = X1, y = X2, color = role, shape = role, size = role, fill = role)) +
-      geom_point() +
-      theme_minimal() + 
-      scale_shape_manual(values = c(23,1,22)) +
-      scale_size_manual(values = 2*c(2,.5,5)) + 
-      theme(
-          legend.title = element_blank(),
-          legend.position = "bottom"
-      )
+plot_counterfactuals = function(cfactuals, data, attribute = NULL) {
+  library("ggplot2")
+  require_namespaces("Rtsne")
+  setDT(data)
+  data[, role := "data"]
+  
+  cdf = cfactuals$data[, role := "counterfactuals"]
+  idf = cfactuals$x_interest[, role := "x_interest"]
+  df = rbind(idf, cdf, data[, colnames(cdf), with = FALSE])
+  df = unique(df)
+  X = model.matrix( ~ ., data = df)
+  X = Rtsne::normalize_input(X)
+  rtdf = Rtsne::Rtsne(X)$Y
+  edf = cbind(data.frame(rtdf), df[, "role", with = FALSE])
+  if (!is.null(attribute)) edf = cbind(edf,  df[, attribute, with = FALSE])
+  ggplot(edf, aes(x = X1, y = X2, color = role, shape = role, size = role)) +
+    geom_point(aes_string(color = eval(attribute))) +
+    geom_point(data=edf %>%
+        filter(role %in% "counterfactuals"),
+      pch = 23,
+      size=4,
+      colour = "black") +
+    theme_minimal() +
+    scale_shape_manual(values = c(18,16,15)) +
+    scale_size_manual(values = 2*c(3,.7,5)) +
+    scale_colour_brewer(palette = "Set1") +
+    theme(
+      legend.title = element_blank(),
+      axis.text.x=element_blank(),
+      axis.text.y=element_blank(),
+      axis.ticks=element_blank(),
+      axis.title.x=element_blank(),
+      axis.title.y=element_blank(),
+      legend.position = "bottom"
+    )
 }
 
 fit_prot_predictor = function(data, new_target) {

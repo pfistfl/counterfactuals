@@ -29,13 +29,14 @@ make_fitness_function_cf = function(predictor, predictor_protected, x_interest, 
 }
 
 
-plot_counterfactuals = function(cfactuals, data, attribute = NULL) {
+plot_counterfactuals = function(cfactuals, data, valid = TRUE, attribute = NULL) {
   library("ggplot2")
   require_namespaces("Rtsne")
   setDT(data)
   data[, role := "data"]
   
   cdf = cfactuals$data[, role := "counterfactuals"]
+  valid = which(cfactuals$evaluate(measures = "dist_target")[, dist_target] == 0)
   idf = cfactuals$x_interest[, role := "x_interest"]
   df = rbind(idf, cdf, data[, colnames(cdf), with = FALSE])
   df = unique(df)
@@ -78,4 +79,63 @@ fit_prot_predictor = function(data, new_target) {
 convert_prot_task = function(data, new_target) {
     TaskClassif$new("pprot", data, new_target)
 }
+
+
+make_cf_train_pop_initializer =  function(ps, x_interest, max_changed, protected, desired_class, 
+  predictor, fitness_function, mu) {
+    function(param_set, n) { 
+      make_f_design = function(X, flex_cols, x_interest, sdevs_num_feats) {
+      function(ps, n) {
+        id_desired = c(predictor$data$X[, protected, with = FALSE] == desired_class)
+        X_sub = predictor$data$X[id_desired,]
+        fitness_vals = fitness_function(X_sub)
+        if (nrow(X_sub) > mu) {
+          is_dom = bbotk::is_dominated(t(fitness_vals))
+          X_nondom = unique(X_sub[!is_dom])
+          if (nrow(X_nondom) > mu) {
+            X_nondom = X_nondom[sample.int(nrow(X_nondom), mu)]
+          } else {
+            # sample dominated training samples
+            X_dom = X_sub[sample.int(nrow(unique(X_sub[is_dom])), mu - nrow(X_nondom))]
+            X_nondom = rbindlist(list(X_nondom, X_dom))
+          }
+        } else {
+          X_nondom = X_sub
+        }
+        
+        param_set = make_param_set(X, lower = NULL, upper = NULL)
+        mydesign = SamplerUnif$new(param_set)$sample(n)
+        mydesign$data[, protected] = desired_class
+        mydesign$data = reset_columns(mydesign$data, p_use_orig = 0.5, max_changed = 1e15, x_interest = x_interest)
+        mydesign$data[sample.int(nrow(mydesign$data), nrow(X_nondom))] = X_nondom
+        mydesign
+      }
+    }
+    f_design = make_f_design(predictor$data$X, flex_cols, x_interest, sdevs_num_feats)
+  
+  my_design = f_design(param_set, n)
+  x_interest_reorderd = x_interest[, names(my_design$data), with = FALSE]
+  
+  
+  factor_cols = names(x_interest_reorderd)[sapply(x_interest_reorderd, is.factor)]
+  if (length(factor_cols) > 0L) {
+    x_interest_reorderd[, (factor_cols) := lapply(.SD, as.character), .SDcols = factor_cols]
+  }
+  
+  # If more changes than allowed, randomly reset some features such that constraint holds
+  if (!is.null(max_changed)) {
+    for (i in seq_len(nrow(my_design$data))) {
+      n_changes = count_changes(my_design$data[i, ], x_interest_reorderd)
+      if (n_changes > max_changed) {
+        idx_diff = which(my_design$data[i, ] != x_interest_reorderd)
+        idx_reset = sample(idx_diff, size = n_changes - max_changed)
+        set(my_design$data, i, j = idx_reset, value = x_interest_reorderd[, ..idx_reset])
+      }
+    }
+  }
+  
+  my_design
+}
+}
+
 

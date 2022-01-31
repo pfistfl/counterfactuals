@@ -90,7 +90,7 @@ CFClassif = R6::R6Class("CFClassif", inherit = CounterfactualMethodClassif,
       assert_number(p_mut_use_orig, lower = 0, upper = 1)
       assert_number(k, lower = 1, upper = nrow(private$predictor$data$X))
       assert_numeric(weights, any.missing = FALSE, len = k, null.ok = TRUE)
-      assert_choice(init_strategy, choices = c("random", "sd", "icecurve", "traindata"))
+      assert_choice(init_strategy, choices = c("random", "sd", "icecurve", "traindata", "trainprotected"))
       assert_flag(use_conditional_mutator)
       assert_flag(quiet)
       assert_choice(protected, colnames(predictor$data$X))
@@ -325,6 +325,8 @@ CFClassif = R6::R6Class("CFClassif", inherit = CounterfactualMethodClassif,
         x_interest = x_interest,
         pred_column = pred_column,
         param_set = private$param_set,
+        protected = private$protected,
+        desired_class = private$desired_class,
         lower = private$lower,
         upper = private$upper,
         sdevs_num_feats = private$sdevs_num_feats,

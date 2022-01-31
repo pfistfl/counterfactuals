@@ -37,7 +37,6 @@ plot_counterfactuals = function(cfactuals, data, attribute = NULL, extra_points 
   data[, role := "data"]
   
   cdf = cfactuals$data[, role := "counterfactuals"]
-  valid = which(cfactuals$evaluate(measures = "dist_target")[, dist_target] == 0)
   idf = cfactuals$x_interest[, role := "x_interest"]
   df = rbind(idf, cdf, data[, colnames(cdf), with = FALSE], extra_points[, colnames(cdf), with = FALSE])
 

@@ -29,7 +29,7 @@ make_fitness_function_cf = function(predictor, predictor_protected, x_interest, 
 }
 
 
-plot_counterfactuals = function(cfactuals, data, attribute = NULL) {
+plot_counterfactuals = function(cfactuals, data, attribute = NULL, extra_points = NULL) {
   library("ggplot2")
   require_namespaces("Rtsne")
   setDT(data)
@@ -37,23 +37,33 @@ plot_counterfactuals = function(cfactuals, data, attribute = NULL) {
   
   cdf = cfactuals$data[, role := "counterfactuals"]
   idf = cfactuals$x_interest[, role := "x_interest"]
-  df = rbind(idf, cdf, data[, colnames(cdf), with = FALSE])
-  df = unique(df)
-  X = model.matrix( ~ ., data = df)
+  df = rbind(idf, cdf, data[, colnames(cdf), with = FALSE], extra_points[, colnames(cdf), with = FALSE])
+
+  X = model.matrix( ~ ., data = df[, setdiff(colnames(df), c("role", "attribute")), with = FALSE])
+  dups = duplicated(X)
+  X = unique(X)
   X = Rtsne::normalize_input(X)
   rtdf = Rtsne::Rtsne(X)$Y
-  edf = cbind(data.frame(rtdf), df[, "role", with = FALSE])
-  if (!is.null(attribute)) edf = cbind(edf,  df[, attribute, with = FALSE])
-  ggplot(edf, aes(x = X1, y = X2, color = role, shape = role, size = role)) +
-    geom_point(aes_string(color = eval(attribute))) +
-    geom_point(data=edf %>%
-        filter(role %in% "counterfactuals"),
+  edf = data.table(cbind(data.frame(rtdf), df[which(!dups), "role", with = FALSE]))
+  if (!is.null(attribute)) edf = cbind(edf,  df[which(!dups), attribute, with = FALSE])
+  
+  if (is.null(extra_points)) {
+    points = c(18,16,15)
+    scales = c(3,.7,5)
+  } else {
+    points = c(18,16,15, 3)
+    scales = c(3,.7,5, 5)
+  }
+  ggplot(edf, aes(x = X1, y = X2, color = role, shape = role, size = role), alpha = .7) +
+    geom_point(aes_string(color = eval(attribute)), alpha = .7) +
+    geom_point(data=edf[role %in% "counterfactuals",],
       pch = 23,
       size=4,
-      colour = "black") +
+      colour = "black",
+      alpha = 0.1) +
     theme_minimal() +
-    scale_shape_manual(values = c(18,16,15)) +
-    scale_size_manual(values = 2*c(3,.7,5)) +
+    scale_shape_manual(values = points) +
+    scale_size_manual(values = 2*scales) +
     scale_colour_brewer(palette = "Set1") +
     theme(
       legend.title = element_blank(),

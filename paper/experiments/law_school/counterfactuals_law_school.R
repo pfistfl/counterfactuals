@@ -4,6 +4,7 @@ library("mlr3learners")
 library("mlr3fairness")
 library("randomForest")
 library("data.table")
+library("ggplot2")
 devtools::load_all()
 source("paper/experiments/law_school/generate_law_school.R")
 source("paper/experiments/metrics.R")
@@ -21,7 +22,7 @@ table(x$pass, xs$pass)
 table(x$pass, xr$pass)
 
 
-## Fit the predictor
+## Fit the predictor (and save data)
 data = data.table(x)
 fwrite(data, file = "paper/experiments/law_school/gen_data.csv")
 rf = randomForest(pass ~ ., data = data)
@@ -33,15 +34,22 @@ mean(predictor$predict(data.table(xr))[,1] - predictor$predict(data.table(x))[,1
 mean(predictor$predict(data.table(xs))[,1] - predictor$predict(data.table(x))[,1])
 
 
-# Example: Find counterfactuals for x_interest
-# cf_classif = CFClassif$new(predictor, protected = "race", n_generations = 10L)
-# cfactuals = cf_classif$find_counterfactuals(
-#     x_interest = data[150L, ], desired_class = "White", desired_prob = c(0.5, 1)
-# )
+# Figure 2: Generate counterfactuals for a single instance
+# Example: Find counterfactuals for x_interest (Black -> White)
+set.seed(SEED)
+id = 858L 
+cf_classif = CFClassif$new(predictor, protected = "race", n_generations = 30L, fixed_features = "sex")
+cfactuals = cf_classif$find_counterfactuals(
+    x_interest = data[id, ], desired_class = "White", desired_prob = c(0.5, 1)
+)
+xtra = data.table(xr[id,])[, role := "true_counterfactual"]
+p = plot_counterfactuals(cfactuals, data, extra_points = xtra, attribute = "race")
+p
+ggsave("paper/experiments/law_school/tsne_bw.pdf", p, width = 8, height = 6.5)
 
 
-
-# Experiment: Race Black -> White  (This runs for multiple minutes)
+# Experiment: Generate counterfactuals for multiple instances:
+# Race Black -> White  (This runs for multiple minutes)
 set.seed(SEED)
 vars = vars_law_school
 idxs = which(data$race == "Black")
@@ -50,11 +58,13 @@ gen_cf_classif = function(data, xr, idx, vars) {
     cfactuals = cf_classif$find_counterfactuals(
         x_interest = data[idx, ], desired_class = "White", desired_prob = c(0.5, 1)
     )
+    cfactuals$subset_to_valid()
     xri = data.table(xr)[idx, colnames(cfactuals$data), with = FALSE]
     out = rbind(
         cfactuals$x_interest[, role := "x_interest"],
         cfactuals$data[, role := "gen_cf"],
         xri[, role := "true_cf"],
+        cfactuals$x_interest[, role := "a_flipped"][, race := "White"],
         find_nn(cfactuals$x_interest, data, "White", "race", vars)[, role := "x_nearest"][, colnames(xri), with = FALSE]
     )
     probs = predictor$predict(out)
@@ -63,6 +73,8 @@ gen_cf_classif = function(data, xr, idx, vars) {
     out$idx = idx
     return(out)
 }
+
+# Comparison to NN baseline and flipping baseline.
 
 res = map(idxs, function(row) {gen_cf_classif(data, xr, row, vars)})
 dt = rbindlist(res)
@@ -87,7 +99,7 @@ dint = rbindlist(map(seq_len(nrow(xint)), function(i) {
     # Compare true to others
     xtr = xtrue[i,]
     dtr = dt[, gow := gower(xtr, .SD, vars), .SDcols = vars][idx == xc$idx,]
-    d_true_gen  = mean(dtr[role == "gen_cf" & sex == xtr$sex,]$gow)
+    d_true_gen  = min(dtr[role == "gen_cf" & sex == xtr$sex,]$gow)
     return(list(d_int_true, d_int_gen, d_int_rnd, d_true_gen, xc$idx))
 }))
 colnames(dint) = c("d(x, xdagger)", "d(x, xstar)", "d(xdagger, xrnd)", "d(xdagger, xstar)", "idx")
@@ -96,13 +108,11 @@ tab$dataset = "law school"
 knitr::kable(tab[, c(6,1:4)], format = "latex")
 
 
-# Compute fairness
+# Figure 5: Fairness violin plot
 source = dt[role == "x_interest", c("prob0", "idx")]
 mdt = merge(source, dt[role == "gen_cf", c("prob0", "idx")], by = "idx")
-
 out = mdt[, .(gen = mean(prob0.x - prob0.y)), by = idx]
 out$true = source$prob0 - dt[role == "true_cf",]$prob0
-
 library(ggplot2)
 dout = melt(out, id.vars = "idx")[, value := abs(value)]
 p = ggplot(dout) + 
@@ -116,11 +126,8 @@ p = ggplot(dout) +
 
 ggsave("comp_icuf.pdf", p)
 
+ # Reported gcuf: 
 colMeans(abs(out))
-
-
-xtra = data.table(xs[150,])[, role := "true_counterfactual"]
-plot_counterfactuals(cfactuals, data, xtra)
 
 # Average change in prediction
 mean(predictor$predict(cfactuals$data)[,1] - predictor$predict(data[150L,])[,1])

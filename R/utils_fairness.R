@@ -51,20 +51,20 @@ plot_counterfactuals = function(cfactuals, data, attribute = NULL, extra_points 
     points = c(18,16,15)
     scales = c(3,.7,5)
   } else {
-    points = c(18,16,15, 3)
-    scales = c(3,.7,5, 5)
+    points = c(18,16,3,15)
+    scales = c(3,.7, 5, 5)
   }
   ggplot(edf, aes(x = X1, y = X2, color = role, shape = role, size = role), alpha = .7) +
-    geom_point(aes_string(color = eval(attribute)), alpha = .7) +
+    geom_point(aes_string(color = eval(attribute)), alpha = .85) +
     geom_point(data=edf[role %in% "counterfactuals",],
       pch = 23,
       size=4,
-      colour = "black",
-      alpha = 0.1) +
+      colour = "black") +
     theme_minimal() +
     scale_shape_manual(values = points) +
     scale_size_manual(values = 2*scales) +
     scale_colour_brewer(palette = "Set1") +
+    geom_point(data=edf[role %in% extra_points$role,], pch = 3, size=8, colour = "black") +
     theme(
       legend.title = element_blank(),
       axis.text.x=element_blank(),

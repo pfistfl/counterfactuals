@@ -66,6 +66,6 @@ generate_cf_law_school_race = function(data, seed = 123L, target_race = NULL) {
     race = sapply(data$race, function(ro) sample(setdiff(races, ro), 1))
     if (!is.null(target_race)) race = rep(target_race, nrow(data))
     X = generate_law_school(nrow(data), race = race, seed = seed)
-    levels(X$race) = races
+    X$race = factor(X$race, levels = races)
     return(X)
 }

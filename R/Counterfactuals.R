@@ -135,6 +135,11 @@ Counterfactuals = R6::R6Class("Counterfactuals",
       private$predictor$predict(private$.data) 
     },
     
+    #' @description Select counterfactuals that meet first objective 
+    subset_to_valid = function() {
+      private$.data =  self$evaluate(measures = "dist_target")[dist_target == 0][, dist_target := NULL]
+    },
+    
     #' @description Plots a parallel plot that connects the (scaled) feature values of each counterfactual and highlights
     #' `x_interest` in blue.
     #' 

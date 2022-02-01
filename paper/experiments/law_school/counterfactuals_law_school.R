@@ -127,9 +127,14 @@ p = ggplot(dout) +
   theme_bw() +
   xlab("") + 
   ylab("x - x'") +
-  scale_x_discrete(labels = c("Generated", "True"))
+  scale_x_discrete(labels = c("gen_cf", "true_cf")) +
+  theme(
+      axis.text.x = element_text(size = 14),
+      axis.text.y = element_text(size = 14),
+      axis.title = element_text(size = 16)
+  )
 
-ggsave("comp_icuf.pdf", p)
+ggsave("comp_icuf.pdf", p, scale = .7)
 
  # Reported gcuf: 
 colMeans(abs(out))

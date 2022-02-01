@@ -47,7 +47,7 @@ d_rnd_int = function(x, fun = l0, vars) {
     )
 }
 
-vars_law_school = c("lsat", "gpa", "dem")
+vars_law_school = c("lsat", "gpa")
 vars_adult = c("age", "capital_gain", "capital_loss", "education", "education_num", "hours_per_week", "martial_status", "occupation", "relationship","workclass")
 
 find_nn = function(xint, data, class = "White", protected = "race", vars) {

@@ -37,15 +37,17 @@ mean(predictor$predict(data.table(xs))[,1] - predictor$predict(data.table(x))[,1
 # Figure 2: Generate counterfactuals for a single instance
 # Example: Find counterfactuals for x_interest (Black -> White)
 set.seed(SEED)
-id = 858L 
-cf_classif = CFClassif$new(predictor, protected = "race", n_generations = 30L, fixed_features = "sex")
+id = 85L 
+cf_classif = CFClassif$new(predictor, protected = "race", n_generations = 50L, fixed_features = "sex")
 cfactuals = cf_classif$find_counterfactuals(
     x_interest = data[id, ], desired_class = "White", desired_prob = c(0.5, 1)
 )
-xtra = data.table(xr[id,])[, role := "true_counterfactual"]
-p = plot_counterfactuals(cfactuals, data, extra_points = xtra, attribute = "race")
+cfactuals$subset_to_valid()
+xtra = data.table(xr[id,])[, role := "true_cf"]
+set.seed(SEED)
+p = plot_counterfactuals(cfactuals, data, extra_points = xtra, attribute = "race", perplexity = 100)
 p
-ggsave("paper/experiments/law_school/tsne_bw.pdf", p, width = 8, height = 6.5)
+ggsave("paper/experiments/law_school/tsne_bw.pdf", p, width = 6.2, height = 5.8, scale = 1)
 
 
 # Experiment: Generate counterfactuals for multiple instances:
@@ -64,7 +66,7 @@ gen_cf_classif = function(data, xr, idx, vars) {
         cfactuals$x_interest[, role := "x_interest"],
         cfactuals$data[, role := "gen_cf"],
         xri[, role := "true_cf"],
-        cfactuals$x_interest[, role := "a_flipped"][, race := "White"],
+        copy(cfactuals$x_interest)[, role := "a_flipped"][, race := "White"],
         find_nn(cfactuals$x_interest, data, "White", "race", vars)[, role := "x_nearest"][, colnames(xri), with = FALSE]
     )
     probs = predictor$predict(out)
@@ -95,17 +97,20 @@ dint = rbindlist(map(seq_len(nrow(xint)), function(i) {
     dx = dt[, gow := gower(xc, .SD, vars), .SDcols = vars][idx == xc$idx,]
     d_int_true = mean(dx[role == "true_cf",]$gow)
     d_int_gen  = mean(dx[role == "gen_cf" & sex == xc$sex,]$gow)
+    d_int_near = mean(dx[role == "x_nearest",]$gow)
+    # d_int_flip = mean(dx[role == "a_flipped",]$gow)
     d_int_rnd  = mean(dtg[, gow := gower(xc, .SD, vars), .SDcols = vars]$gow)
+
     # Compare true to others
     xtr = xtrue[i,]
     dtr = dt[, gow := gower(xtr, .SD, vars), .SDcols = vars][idx == xc$idx,]
     d_true_gen  = min(dtr[role == "gen_cf" & sex == xtr$sex,]$gow)
-    return(list(d_int_true, d_int_gen, d_int_rnd, d_true_gen, xc$idx))
+    return(list(d_int_true, d_int_gen, d_int_rnd, d_true_gen, d_int_near, xc$idx))
 }))
-colnames(dint) = c("d(x, xdagger)", "d(x, xstar)", "d(xdagger, xrnd)", "d(xdagger, xstar)", "idx")
+colnames(dint) = c("d(x, xdagger)", "d(x, xstar)", "d(x, xrnd)", "d(xdagger, xstar)", "d(x, xnn)", "idx")
 tab = data.table(t(round(colMeans(dint), 3)))
 tab$dataset = "law school"
-knitr::kable(tab[, c(6,1:4)], format = "latex")
+knitr::kable(tab[, c(1,2,3,5)], format = "latex")
 
 
 # Figure 5: Fairness violin plot
@@ -132,5 +137,12 @@ colMeans(abs(out))
 # Average change in prediction
 mean(predictor$predict(cfactuals$data)[,1] - predictor$predict(data[150L,])[,1])
 
+# Compare predictions between baselines
+dd = dcast(dt, idx ~ role, value.var = "prob0", fun.aggregate = mean)
+diffs = dd[, lapply(.SD, function(x) abs(x - x_interest)), .SDcols = colnames(dd)[c(2,3,4,6)]]
+colnames(diff) = c("d_fl")
+
+knitr::kable(diffs[, lapply(.SD, mean)], format = "latex", digits = 3)
+knitr::kable(diffs[, lapply(.SD, function(x) {x = sd(x) / (length(x) - 1L)})], format = "latex", digits = 3)
 
 

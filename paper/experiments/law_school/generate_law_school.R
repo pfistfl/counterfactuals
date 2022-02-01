@@ -20,7 +20,7 @@ generate_law_school = function(n, race = NULL, sex = NULL, seed = 123L) {
     zfya = rnorm(eta_u_fya*u + a %*% eta_a_fya, 2) + fya0
     fya = rbinom(n, 1, exp(zfya) / (1+exp(zfya)))
     dem = rnorm(n)
-    return(data.frame(race = factor(race), sex = factor(sex), gpa, lsat, dem, pass = factor(fya)))
+    return(data.frame(race = factor(race), sex = factor(sex), gpa, lsat, pass = factor(fya)))
 }
 
 gen_race_sex = function(race_sex, n) {

@@ -30,21 +30,21 @@ make_fitness_function_cf = function(predictor, predictor_protected, x_interest, 
 
 
 
-plot_counterfactuals = function(cfactuals, data, attribute = NULL, extra_points = NULL) {
+plot_counterfactuals = function(cfactuals, data, attribute = NULL, extra_points = NULL, ...) {
   library("ggplot2")
   require_namespaces("Rtsne")
   setDT(data)
   data[, role := "data"]
   
-  cdf = cfactuals$data[, role := "counterfactuals"]
-  idf = cfactuals$x_interest[, role := "x_interest"]
+  cdf = cfactuals$data[, role := "gen_cf"]
+  idf = cfactuals$x_interest[, role := "x"]
   df = rbind(idf, cdf, data[, colnames(cdf), with = FALSE], extra_points[, colnames(cdf), with = FALSE])
 
   X = model.matrix( ~ ., data = df[, setdiff(colnames(df), c("role", "attribute")), with = FALSE])
   dups = duplicated(X)
   X = unique(X)
   X = Rtsne::normalize_input(X)
-  rtdf = Rtsne::Rtsne(X)$Y
+  rtdf = Rtsne::Rtsne(X, ...)$Y
   edf = data.table(cbind(data.frame(rtdf), df[which(!dups), "role", with = FALSE]))
   if (!is.null(attribute)) edf = cbind(edf,  df[which(!dups), attribute, with = FALSE])
   
@@ -57,15 +57,16 @@ plot_counterfactuals = function(cfactuals, data, attribute = NULL, extra_points 
   }
   ggplot(edf, aes(x = X1, y = X2, color = role, shape = role, size = role), alpha = .7) +
     geom_point(aes_string(color = eval(attribute)), alpha = .85) +
-    geom_point(data=edf[role %in% "counterfactuals",],
+    geom_point(data=edf[role %in% "gen_cf",],
       pch = 23,
       size=4,
-      colour = "black") +
+      stroke = .7,
+      colour = "#333333") +
     theme_minimal() +
     scale_shape_manual(values = points) +
-    scale_size_manual(values = 2*scales) +
+    scale_size_manual(values = 1.8*scales, guide = "none") +
     scale_colour_brewer(palette = "Set1") +
-    geom_point(data=edf[role %in% extra_points$role,], pch = 3, size=8, colour = "black") +
+    geom_point(data=edf[role %in% extra_points$role,], pch = 3, stroke = 3.5, size=7, colour = "black") +
     theme(
       legend.title = element_blank(),
       axis.text.x=element_blank(),
@@ -73,7 +74,8 @@ plot_counterfactuals = function(cfactuals, data, attribute = NULL, extra_points 
       axis.ticks=element_blank(),
       axis.title.x=element_blank(),
       axis.title.y=element_blank(),
-      legend.position = "bottom"
+      legend.position = "bottom",
+      legend.spacing.x = unit(.1, 'cm')
     )
 }
 

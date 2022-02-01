@@ -49,11 +49,11 @@ plot_counterfactuals = function(cfactuals, data, attribute = NULL, extra_points 
   if (!is.null(attribute)) edf = cbind(edf,  df[which(!dups), attribute, with = FALSE])
   
   if (is.null(extra_points)) {
-    points = c(18,16,15)
-    scales = c(3,.7,5)
+    points = c(16,18,15)
+    scales = c(1.2, 3,5)
   } else {
-    points = c(18,16,3,15)
-    scales = c(3,.7, 5, 5)
+    points = c(16,18,3,15)
+    scales = c(1.2, 3, 5, 5)
   }
   ggplot(edf, aes(x = X1, y = X2, color = role, shape = role, size = role), alpha = .7) +
     geom_point(aes_string(color = eval(attribute)), alpha = .85) +

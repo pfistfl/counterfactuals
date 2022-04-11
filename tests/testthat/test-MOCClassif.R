@@ -61,6 +61,19 @@ test_that("Can handle ordered factor input columns", {
 })
 
 
-
-
-
+test_that("distance_function can be exchanged", {
+  set.seed(54542142)
+  rf = get_rf_classif_iris()
+  iris_pred = iml::Predictor$new(rf, type = "prob")
+  x_interest = iris[1L, ]
+  correct_dist_function = function(x, y, data) {
+    res = matrix(NA, nrow = nrow(x), ncol = nrow(y))
+    for (i in 1:nrow(x)) for (j in 1:nrow(y)) res[i, j] = sqrt(sum(((x[i, ] - y[j, ])^2)))
+    res
+  }
+  moc_classif = MOCClassif$new(
+    iris_pred, n_generations = 3L, distance_function = correct_dist_function, quiet = TRUE
+  )
+  cfactuals = moc_classif$find_counterfactuals(x_interest, desired_class = "versicolor", desired_prob = c(0.5, 1))
+  expect_data_table(cfactuals$data)
+})

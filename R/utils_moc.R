@@ -1,4 +1,5 @@
-make_fitness_function = function(predictor, x_interest, pred_column, target, weights, k, fixed_features, param_set) {
+make_fitness_function = function(predictor, x_interest, pred_column, target, weights, k, fixed_features, param_set,
+                                 distance_function) {
   
   function(xdt) {
     # Add values of fixed_features just for prediction
@@ -19,18 +20,22 @@ make_fitness_function = function(predictor, x_interest, pred_column, target, wei
     pred = predictor$predict(xdt)[[pred_column]]
     
     dist_target = sapply(pred, function(x) ifelse(between(x, target[1L], target[2L]), 0, min(abs(x - target))))
-    ranges = param_set$upper - param_set$lower
-    dist_x_interest = as.vector(StatMatch::gower.dist(x_interest, xdt, rngs = ranges, KR.corr = FALSE))
-    nr_changed = rowSums(xdt != x_interest[rep(seq_len(nrow(x_interest)), nrow(xdt)), ])
-    dist_train = gower_topn(x = xdt, y = predictor$data$X, n = k)$distance
+    dist_x_interest = as.vector(eval_distance(distance_function, xdt, x_interest, predictor$data$X))
+    no_changed = rowSums(xdt != x_interest[rep(seq_len(nrow(x_interest)), nrow(xdt)), ])
+    dist_train = eval_distance(distance_function, xdt, predictor$data$X, predictor$data$X)
+    # Subset the distance matrix w.r.t the k-nearest neighbors of each candidate
+    dist_train = t(apply(dist_train, 1L, function(x) sort(x)))
+    dist_train = dist_train[, seq_len(k), drop = FALSE]
+
     if (!is.null(weights)) {
-      dist_train = apply(dist_train, 2L, weighted.mean, w = weights)
+      dist_train = apply(dist_train, 1L, weighted.mean, w = weights)
     } else {
-      dist_train = apply(dist_train, 2L, mean)
+      dist_train = apply(dist_train, 1L, mean)
     }
-    data.table(cbind(dist_target, dist_x_interest, nr_changed, dist_train))
+    data.table(cbind(dist_target, dist_x_interest, no_changed, dist_train))
   }
 }
+
 
 # Reset mutated feature values to feature value of x_interest with prop `p_use_orig` and controls that maximum
 # `max_changed` features are changed
@@ -60,42 +65,8 @@ MutatorReset = R6::R6Class("MutatorReset", inherit = Mutator,
   private = list(
     .x_interest = NULL,
     
-    .mutate = function(values, context) {
-      params = self$param_set$get_values(context = context)
-      reset_columns(values, params$p_use_orig, params$max_changed, private$.x_interest)
-    }
-  )
-)
-
-
-
-# Reset recombinated values to feature value of x_interest with prop `p_use_orig` and controls that maximum
-# `max_changed` features are changed
-RecombinatorReset = R6::R6Class("RecombinatorReset", inherit = Recombinator,
-  
-  public = list(
-    initialize = function(x_interest, p_use_orig, max_changed) {
-      assert_data_table(x_interest)
-      assert_numeric(p_use_orig, lower = 0, upper = 1, len = 1L, any.missing = FALSE)
-      assert_integerish(max_changed, lower = 0, len = 1L, any.missing = FALSE, null.ok = TRUE)
-      params = ps(
-        max_changed = p_int(special_vals = list(NULL)),
-        p_use_orig = p_dbl()
-      )
-      params$values = list(
-        "max_changed" = max_changed,
-        "p_use_orig" = p_use_orig
-      )
-      super$initialize(param_set = params)
-      private$.x_interest = x_interest
-    }
-  ),
-  
-  private = list(
-    .x_interest = NULL,
-
-    .recombine = function(values, context) {
-      params = self$param_set$get_values(context = context)
+    .mutate = function(values) {
+      params = self$param_set$get_values()
       reset_columns(values, params$p_use_orig, params$max_changed, private$.x_interest)
     }
   )
@@ -155,13 +126,13 @@ ScalorNondomPenalized = R6::R6Class("ScalorNondomPenalized", inherit = Scalor,
     }
   ),
   private = list(
-    .scale = function(values, fitnesses, context) {
+    .scale = function(values, fitnesses) {
 
-      params = self$param_set$get_values(context = context)
+      params = self$param_set$get_values()
       if (params$jitter) {
         fitnesses = fitnesses * (1 + runif(length(fitnesses)) * sqrt(.Machine$double.eps))
       }
-      sorted = order_nondominated(fitnesses)$fronts
+      sorted = rank_nondominated(fitnesses)$fronts
       
       # Add penalization for individuals with -dist_target lower than -epsilon
       epsilon = params$epsilon
@@ -248,13 +219,12 @@ make_moc_mutator = function(ps, x_interest, max_changed, sdevs, p_mut, p_mut_gen
 }
 
 
-make_moc_recombinator = function(ps, x_interest, max_changed, p_rec, p_rec_gen, p_rec_use_orig) {
+make_moc_recombinator = function(ps, x_interest, max_changed, p_rec, p_rec_gen) {
 
   ops_list = list()
   # If clauses are necessary to avoid warning that no corresponding dimensions
   if ("ParamDbl" %in% ps$class) {
-    # TODO: Replace this with "simulated binary crossover recombinator" once it is available
-    ops_list[["ParamDbl"]] = rec("maybe", rec("xounif"), rec("null", n_indivs_in = 2L, n_indivs_out = 2L), p = p_rec)
+    ops_list[["ParamDbl"]] = rec("maybe", rec("sbx"), rec("null", n_indivs_in = 2L, n_indivs_out = 2L), p = p_rec)
   }
   rec_fact_int = rec("maybe", rec("xounif"), rec("null", n_indivs_in = 2L, n_indivs_out = 2L), p = p_rec)
   if ("ParamInt" %in% ps$class) {
@@ -267,26 +237,25 @@ make_moc_recombinator = function(ps, x_interest, max_changed, p_rec, p_rec_gen, 
   op_seq1_rec = rec("combine", operators = ops_list)
   op_seq1_no_rec = rec("null", n_indivs_in = 2L, n_indivs_out = 2L)
   op_r_seq_1 = rec("maybe", op_seq1_rec, op_seq1_no_rec, p = p_rec_gen)
-  op_r_seq_2 = RecombinatorReset$new(x_interest, p_rec_use_orig, max_changed)
-  rec("sequential", list(op_r_seq_1, op_r_seq_2))
+  rec("sequential", list(op_r_seq_1))
 }
 
 
 make_moc_pop_initializer = function(ps, x_interest, max_changed, init_strategy, flex_cols, sdevs, lower, upper, 
-                                    predictor, fitness_function, mu) {
+                                    predictor, fitness_function, mu, p_use_orig = 0.5) {
   function(param_set, n) {
     
     if (init_strategy == "random") {
       f_design = function(ps, n) {
         mydesign = SamplerUnif$new(ps)$sample(n)
-        mydesign$data = reset_columns(mydesign$data, p_use_orig = 0.5, max_changed = 1e15, x_interest = x_interest)
+        mydesign$data = reset_columns(mydesign$data, p_use_orig, max_changed = 1e15, x_interest = x_interest)
         mydesign
       }
     } else if (init_strategy == "sd") {
       if (length(sdevs) == 0L) {
         f_design = function(ps, n) {
           mydesign = SamplerUnif$new(ps)$sample(n)
-          mydesign$data = reset_columns(mydesign$data, p_use_orig = 0.5, max_changed = 1e15, x_interest = x_interest)
+          mydesign$data = reset_columns(mydesign$data, p_use_orig, max_changed = 1e15, x_interest = x_interest)
           mydesign
         }
       } else {
@@ -300,7 +269,7 @@ make_moc_pop_initializer = function(ps, x_interest, max_changed, init_strategy, 
           param_set_init = make_param_set(X, lower = lower_bounds, upper = upper_bounds)
           function(ps, n) {
             mydesign = SamplerUnif$new(param_set_init)$sample(n)
-            mydesign$data = reset_columns(mydesign$data, p_use_orig = 0.5, max_changed = 1e15, x_interest = x_interest)
+            mydesign$data = reset_columns(mydesign$data, p_use_orig, max_changed = 1e15, x_interest = x_interest)
             mydesign
           }
         }
@@ -374,13 +343,13 @@ make_moc_pop_initializer = function(ps, x_interest, max_changed, init_strategy, 
           param_set = make_param_set(X, lower = NULL, upper = NULL)
           mydesign = SamplerUnif$new(param_set)$sample(n)
           mydesign$data[sample.int(nrow(mydesign$data), nrow(X_nondom))] = X_nondom
-          mydesign$data = reset_columns(mydesign$data, p_use_orig = 0.5, max_changed = 1e15, x_interest = x_interest)
+          mydesign$data = reset_columns(mydesign$data, p_use_orig, max_changed = 1e15, x_interest = x_interest)
           mydesign
         }
       }
       f_design = make_f_design(predictor$data$X, flex_cols, x_interest, sdevs_num_feats)
     }
-    
+
     my_design = f_design(param_set, n)
     x_interest_reorderd = x_interest[, names(my_design$data), with = FALSE]
     
@@ -430,7 +399,7 @@ get_ICE_sd = function(x_interest, predictor, param_set) {
 
 
 make_moc_statistics_plots = function(archive, ref_point, normalize_objectives) {
-  obj_names = c("dist_target", "dist_x_interest", "nr_changed", "dist_train")
+  obj_names = c("dist_target", "dist_x_interest", "no_changed", "dist_train")
 
   ls_stats = lapply(seq_len(max(archive$data$batch_nr)), function(i){
     best = archive$best(seq_len(i))
@@ -467,7 +436,7 @@ make_moc_statistics_plots = function(archive, ref_point, normalize_objectives) {
     gg_mean = ggplot2::ggplot(dt_agg_mean) + 
       ggplot2::geom_line(ggplot2::aes(x = generation, y = value, color = variable)) +
       ggplot2::xlab("generations") +
-      ggplot2::ggtitle("Mean objective values (normalized)") +
+      ggplot2::ggtitle("Mean objective values (scaled)") +
       ggplot2::theme_bw() +
       ggplot2::scale_x_continuous(breaks = function(x) unique(floor(pretty(seq(0, (max(x) + 1) * 1.1))))) +
       ggplot2::theme(legend.title = ggplot2::element_blank(), axis.title.y = ggplot2::element_blank())
@@ -475,7 +444,7 @@ make_moc_statistics_plots = function(archive, ref_point, normalize_objectives) {
     gg_min = ggplot2::ggplot(dt_agg_min) + 
       ggplot2::geom_line(ggplot2::aes(x = generation, y = value, color = variable)) +
       ggplot2::xlab("generations") +
-      ggplot2::ggtitle("Minimum objective values (normalized)") +
+      ggplot2::ggtitle("Minimum objective values (scaled)") +
       ggplot2::theme_bw() +
       ggplot2::scale_x_continuous(breaks = function(x) unique(floor(pretty(seq(0, (max(x) + 1) * 1.1))))) +
       ggplot2::theme(legend.title = ggplot2::element_blank(), axis.title.y = ggplot2::element_blank())
@@ -513,7 +482,7 @@ make_moc_statistics_plots = function(archive, ref_point, normalize_objectives) {
 }
 
 comp_domhv_all_gen = function(archive, ref_point) {
-  obj_names = c("dist_target", "dist_x_interest", "nr_changed", "dist_train")
+  obj_names = c("dist_target", "dist_x_interest", "no_changed", "dist_train")
   data.table(
     generations = unique(archive$data$batch_nr), 
     hv = vapply(
@@ -547,10 +516,11 @@ make_moc_search_plot = function(data, objectives) {
 # Conditional mutator as described in the MOC paper
 MutatorConditional = R6::R6Class("MutatorConditional", inherit = Mutator,
   public = list(
-    initialize = function(cond_sampler, param_set, p_mut, p_mut_gen) {
+    initialize = function(cond_sampler, x_interest, param_set, p_mut, p_mut_gen) {
       super$initialize()
       assert_class(param_set, "ParamSet")
       assert_list(cond_sampler, len = length(param_set$ids()))
+      private$x_interest = x_interest
       private$param_set = param_set
       private$cond_sampler = cond_sampler
       private$p_mut = p_mut
@@ -559,15 +529,21 @@ MutatorConditional = R6::R6Class("MutatorConditional", inherit = Mutator,
   ),
   private = list(
     cond_sampler = NULL,
+    x_interest = NULL,
     param_set = NULL,
     p_mut = NULL,
     p_mut_gen = NULL,
     
-    .mutate = function(values, context) {
+    .mutate = function(values) {
+      flex_features = copy(names(values))
+      fixed_features = setdiff(names(private$x_interest), names(values))
+      if (length(fixed_features) > 0) {
+        values[, (fixed_features) := x_interest[, fixed_features, with = FALSE]]
+      }
       values_mutated = copy(values)
       for (i in seq_len(nrow(values))) {
         if (runif(1L) < private$p_mut) {
-          for (j in sample(names(values))) {
+          for (j in sample(flex_features)) {
             if (runif(1L) < private$p_mut_gen) {
               set(values_mutated, i, j, value = private$cond_sampler[[j]]$sample(values[i, ]))
             }
@@ -575,21 +551,16 @@ MutatorConditional = R6::R6Class("MutatorConditional", inherit = Mutator,
         }
         
       }
-      values_mutated
+      values_mutated[, (fixed_features) := NULL]
     }
  )
 )
 
 
 make_moc_conditional_mutator = function(ps, x_interest, max_changed, p_mut, p_mut_gen, p_mut_use_orig, cond_sampler) {
-  op_seq1 = MutatorConditional$new(cond_sampler, ps, p_mut, p_mut_gen)
+  op_seq1 = MutatorConditional$new(cond_sampler, x_interest, ps, p_mut, p_mut_gen)
   op_seq2 = MutatorReset$new(x_interest, p_mut_use_orig, max_changed)
   mut("sequential", list(op_seq1, op_seq2))
 }
 
 
-quiet = function(x) { 
-  sink(tempfile()) 
-  on.exit(sink()) 
-  invisible(force(x)) 
-} 

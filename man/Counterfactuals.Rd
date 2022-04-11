@@ -24,6 +24,19 @@ The counterfactuals for \code{x_interest}.}
 
 \item{\code{x_interest}}{(\code{data.table(1)}) \cr
 A single row with the observation of interest.}
+
+\item{\code{distance_function}}{(\verb{function()}) \cr
+The distance function used in the second and fourth evaluation measure.
+The function must have three arguments:
+\code{x}, \code{y}, and \code{data} and return a \code{numeric} matrix. If set to \code{NULL} (default), then Gower distance (Gower 1971) is used.}
+
+\item{\code{subsetted}}{(\code{logical(1)})\cr
+Returns if data was subsetted to those meeting the
+desired prediction.}
+
+\item{\code{fulldata}}{(\code{data.table})\cr
+Returns the fulldata if data was subsetted to those meeting the
+desired outcome.}
 }
 \if{html}{\out{</div>}}
 }
@@ -33,6 +46,7 @@ A single row with the observation of interest.}
 \item \href{#method-new}{\code{Counterfactuals$new()}}
 \item \href{#method-evaluate}{\code{Counterfactuals$evaluate()}}
 \item \href{#method-predict}{\code{Counterfactuals$predict()}}
+\item \href{#method-subset_to_valid}{\code{Counterfactuals$subset_to_valid()}}
 \item \href{#method-plot_parallel}{\code{Counterfactuals$plot_parallel()}}
 \item \href{#method-plot_freq_of_feature_changes}{\code{Counterfactuals$plot_freq_of_feature_changes()}}
 \item \href{#method-get_freq_of_feature_changes}{\code{Counterfactuals$get_freq_of_feature_changes()}}
@@ -82,7 +96,7 @@ for classification tasks (\link{CounterfactualMethodClassif}).}
 Evaluates the counterfactuals. It returns the counterfactuals together with the evaluation \code{measures}.
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Counterfactuals$evaluate(
-  measures = c("dist_x_interest", "dist_target", "nr_changed", "dist_train"),
+  measures = c("dist_x_interest", "dist_target", "no_changed", "dist_train"),
   show_diff = FALSE,
   k = 1L,
   weights = NULL
@@ -100,9 +114,9 @@ The following measures are available:
 dissimilarity measure (Gower 1971).
 \item \code{dist_target}: The absolute distance of the prediction for a counterfactual to the interval \code{desired_outcome}
 (regression tasks) or \code{desired_prob} (classification tasks).
-\item \code{nr_changed}: The number of feature changes w.r.t. \code{x_interest}.
+\item \code{no_changed}: The number of feature changes w.r.t. \code{x_interest}.
 \item \code{dist_train}: The (weighted) distance to the \code{k} nearest training data points measured by Gower's
-dissimilarity measure (Gower 1971)
+dissimilarity measure (Gower 1971).
 }}
 
 \item{\code{show_diff}}{(\code{logical(1)})\cr
@@ -133,10 +147,21 @@ Returns the predictions for the counterfactuals.
 
 }
 \if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-subset_to_valid"></a>}}
+\if{latex}{\out{\hypertarget{method-subset_to_valid}{}}}
+\subsection{Method \code{subset_to_valid()}}{
+Subset data to those meeting the desired prediction,
+full data is still accessible in the fulldata field
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{Counterfactuals$subset_to_valid()}\if{html}{\out{</div>}}
+}
+
+}
+\if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-plot_parallel"></a>}}
 \if{latex}{\out{\hypertarget{method-plot_parallel}{}}}
 \subsection{Method \code{plot_parallel()}}{
-Plots a parallel plot that connects the (scaled) feature values of each counterfactual and highlights
+Plots a parallel plot that connects the (scaled) numeric feature values of each counterfactual and highlights
 \code{x_interest} in blue.
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Counterfactuals$plot_parallel(
@@ -203,14 +228,14 @@ A (named) \code{numeric} vector with the frequency of feature changes.
 \if{html}{\out{<a id="method-plot_surface"></a>}}
 \if{latex}{\out{\hypertarget{method-plot_surface}{}}}
 \subsection{Method \code{plot_surface()}}{
-Creates a surface plot for two features. \code{x_interest} is represented as white dot and
+Creates a surface plot for two features. \code{x_interest} is represented as a white dot and
 all counterfactuals that differ from \code{x_interest} \strong{only} in the two selected features are represented as black dots.
-The tick marks next to the axes show the marginal distribution of the counterfactuals. \cr
-The exact plot type depends on the selected feature types:
+The tick marks next to the axes show the marginal distribution of the observed data (\code{predictor$data$X}). \cr
+The exact plot type depends on the selected feature types and number of features:
 \itemize{
-\item 2 \* \code{numeric}: surface plot
-\item 2 \* \code{non-numeric}: heatmap
-\item 1 \* \code{numeric}, 1 \* \code{non-numeric}: line graph
+\item 2 numeric features: surface plot
+\item 2 non-numeric features: heatmap
+\item 1 numeric or non-numeric feature: line graph
 }
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Counterfactuals$plot_surface(feature_names, grid_size = 250L)}\if{html}{\out{</div>}}

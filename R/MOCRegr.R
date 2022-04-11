@@ -37,17 +37,15 @@ MOCRegr = R6::R6Class("MOCRegr", inherit = CounterfactualMethodRegr,
     #' @param n_generations (`integerish(1)`)\cr  
     #'   The number of generations. Default is `175L`.   
     #' @param p_rec (`numeric(1)`)\cr  
-    #'   Probability with which an individual is selected for recombination. Default is `0.57`.
+    #'   Probability with which an individual is selected for recombination. Default is `0.66`.
     #' @param p_rec_gen (`numeric(1)`)\cr  
-    #'   Probability with which a feature/gene is selected for recombination. Default is `0.85`.  
-    #' @param p_rec_use_orig (`numeric(1)`)\cr  
-    #'   Probability with which a feature/gene is reset to its original value in `x_interest` after recombination. Default is `0.88`.    
+    #'   Probability with which a feature/gene is selected for recombination. Default is `0.73`.  
     #' @param p_mut (`numeric(1)`)\cr  
-    #'   Probability with which an individual is selected for mutation. Default is `0.79`.    
+    #'   Probability with which an individual is selected for mutation. Default is `0.8`.    
     #' @param p_mut_gen (`numeric(1)`)\cr  
-    #'   Probability with which a feature/gene is selected for mutation. Default is `0.56`.   
+    #'   Probability with which a feature/gene is selected for mutation. Default is `0.71`.   
     #' @param p_mut_use_orig (`numeric(1)`)\cr  
-    #'   Probability with which a feature/gene is reset to its original value in `x_interest` after mutation. Default is `0.32`.    
+    #'   Probability with which a feature/gene is reset to its original value in `x_interest` after mutation. Default is `0.26`.    
     #' @param k (`integerish(1)`)\cr  
     #'   The number of data points to use for the forth objective. Default is `1L`.
     #' @param weights (`numeric(1) | numeric(k)` | `NULL`)\cr  
@@ -63,12 +61,19 @@ MOCRegr = R6::R6Class("MOCRegr", inherit = CounterfactualMethodRegr,
     #'   on the values of the other feature. Default is `FALSE`.
     #' @param quiet (`logical(1)`)\cr 
     #'  Should information about the optimization status be hidden? Default is `FALSE`.
+    #' @param distance_function (`function()` | `NULL`)\cr 
+    #'  The distance function to be used in the second and fourth objective. The function must have three arguments:
+    #'  `x`, `y`, and `data` and return a `numeric` matrix with `nrow(x)` rows and `nrow(y)` columns. 
+    #'  If set to `NULL` (default), then Gower distance (Gower 1971) is used.
     initialize = function(predictor, epsilon = NULL, fixed_features = NULL, max_changed = NULL, mu = 20L,
-                          n_generations = 175L, p_rec = 0.57, p_rec_gen = 0.85, p_rec_use_orig = 0.88, p_mut = 0.79,
-                          p_mut_gen = 0.56, p_mut_use_orig = 0.32, k = 1L, weights = NULL, lower = NULL, upper = NULL, 
-                          init_strategy = "random", use_conditional_mutator = FALSE, quiet = FALSE) {
+                          n_generations = 175L, p_rec = 0.66, p_rec_gen = 0.73, p_mut = 0.80, 
+                          p_mut_gen = 0.71, p_mut_use_orig = 0.26, k = 1L, weights = NULL, lower = NULL, upper = NULL, 
+                          init_strategy = "random", use_conditional_mutator = FALSE, quiet = FALSE, distance_function = NULL) {
       
-      super$initialize(predictor, lower, upper)
+      if (is.null(distance_function)) {
+        distance_function = gower_dist
+      }
+      super$initialize(predictor, lower, upper, distance_function)
       
       assert_number(epsilon, lower = 0, null.ok = TRUE)
       if (!is.null(fixed_features)) {
@@ -79,7 +84,6 @@ MOCRegr = R6::R6Class("MOCRegr", inherit = CounterfactualMethodRegr,
       assert_integerish(n_generations, lower = 0, len = 1L)
       assert_number(p_rec, lower = 0, upper = 1)
       assert_number(p_rec_gen, lower = 0, upper = 1)
-      assert_number(p_rec_use_orig, lower = 0, upper = 1)
       assert_number(p_mut, lower = 0, upper = 1)
       assert_number(p_mut_gen, lower = 0, upper = 1)
       assert_number(p_mut_use_orig, lower = 0, upper = 1)
@@ -100,11 +104,13 @@ MOCRegr = R6::R6Class("MOCRegr", inherit = CounterfactualMethodRegr,
           stop("Package 'basefun' needed for this function to work. Please install it.", call. = FALSE)
         }
         
+        nams_cs = names(predictor$data$X)
+        nams_cs = setdiff(nams_cs, fixed_features)
         private$conditional_sampler = sapply(
-          names(predictor$data$X), function(fname) ConditionalSampler$new(predictor$data$X, fname),
+          nams_cs, function(fname) ConditionalSampler$new(predictor$data$X, fname),
           simplify = FALSE, USE.NAMES = TRUE
         )
-        names(private$conditional_sampler) = names(predictor$data$X)
+        names(private$conditional_sampler) = nams_cs
       }
       
       private$epsilon = epsilon
@@ -114,7 +120,6 @@ MOCRegr = R6::R6Class("MOCRegr", inherit = CounterfactualMethodRegr,
       private$n_generations = n_generations
       private$p_rec = p_rec
       private$p_rec_gen = p_rec_gen
-      private$p_rec_use_orig = p_rec_use_orig
       private$p_mut = p_mut
       private$p_mut_gen = p_mut_gen
       private$p_mut_use_orig = p_mut_use_orig
@@ -159,7 +164,7 @@ MOCRegr = R6::R6Class("MOCRegr", inherit = CounterfactualMethodRegr,
     
     #' @description Visualizes two selected objective values of all emerged individuals in a scatter plot.
     #' @param objectives (`character(2)`)\cr  
-    #'   The two objectives to be shown in the plot. Possible values are "dist_target", "dist_x_interest, "nr_changed",
+    #'   The two objectives to be shown in the plot. Possible values are "dist_target", "dist_x_interest, "no_changed",
     #'   and "dist_train".
     plot_search = function(objectives = c("dist_target", "dist_x_interest")) {
       if (!requireNamespace("ggplot2", quietly = TRUE)) {
@@ -168,7 +173,7 @@ MOCRegr = R6::R6Class("MOCRegr", inherit = CounterfactualMethodRegr,
       if (is.null(self$optimizer)) {
         stop("There are no results yet. Please run `$find_counterfactuals` first.")
       }
-      assert_names(objectives, subset.of = c("dist_target", "dist_x_interest", "nr_changed", "dist_train"))
+      assert_names(objectives, subset.of = c("dist_target", "dist_x_interest", "no_changed", "dist_train"))
       make_moc_search_plot(self$optimizer$archive$data, objectives)
     }
     
@@ -194,7 +199,6 @@ MOCRegr = R6::R6Class("MOCRegr", inherit = CounterfactualMethodRegr,
     n_generations = NULL,
     p_rec = NULL,
     p_rec_gen = NULL,
-    p_rec_use_orig = NULL,
     p_mut = NULL,
     p_mut_gen = NULL,
     p_mut_use_orig = NULL,
@@ -213,7 +217,6 @@ MOCRegr = R6::R6Class("MOCRegr", inherit = CounterfactualMethodRegr,
       pred_column = private$get_pred_column()
       y_hat_interest = private$predictor$predict(private$x_interest)[[pred_column]]
       private$ref_point = c(min(abs(y_hat_interest - private$desired_outcome)), 1, ncol(private$x_interest), 1)
-      
       private$.optimizer = moc_algo(
         predictor = private$predictor,
         x_interest = private$x_interest,
@@ -230,7 +233,6 @@ MOCRegr = R6::R6Class("MOCRegr", inherit = CounterfactualMethodRegr,
         n_generations = private$n_generations,
         p_rec = private$p_rec,
         p_rec_gen = private$p_rec_gen,
-        p_rec_use_orig = private$p_rec_use_orig,
         p_mut = private$p_mut,
         p_mut_gen = private$p_mut_gen,
         p_mut_use_orig = private$p_mut_use_orig,
@@ -238,6 +240,7 @@ MOCRegr = R6::R6Class("MOCRegr", inherit = CounterfactualMethodRegr,
         weights = private$weights,
         init_strategy = private$init_strategy,
         cond_sampler = private$conditional_sampler,
+        distance_function = private$distance_function,
         quiet = private$quiet
       )
 
@@ -259,7 +262,6 @@ MOCRegr = R6::R6Class("MOCRegr", inherit = CounterfactualMethodRegr,
       cat(" - p_mut_use_orig: ", private$p_mut_use_orig, "\n")
       cat(" - p_rec: ", private$p_rec, "\n")
       cat(" - p_rec_gen: ", private$p_rec_gen, "\n")
-      cat(" - p_rec_use_orig: ", private$p_rec_use_orig, "\n")
       cat(" - upper: ", private$upper)
       cat(" - weights: ", private$weights, "\n")
     }

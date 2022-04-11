@@ -7,14 +7,15 @@
 MOC (Dandl et. al 2020) solves a multi-objective optimization problem to find counterfactuals. The four objectives
 to minimize are:
 \enumerate{
-\item {Distance to \code{desired_prob} (classification tasks) or \code{desired_prob} (regression tasks).}
-\item {Dissimilarity to \code{x_interest} measured by Gower's dissimilarity measure (Gower 1971).}
-\item {Number of feature changes.}
-\item {(Weighted) sum of dissimilarities to the \code{k} nearest data points in \code{predictor$data$X}.}
+\item {\code{dist_target}: Distance to \code{desired_prob} (classification tasks) or \code{desired_prob} (regression tasks).}
+\item {\code{dist_x_interest}: Dissimilarity to \code{x_interest} measured by Gower's dissimilarity measure (Gower 1971).}
+\item {\code{no_changed}: Number of feature changes.}
+\item {\code{dist_train}: (Weighted) sum of dissimilarities to the \code{k} nearest data points in \code{predictor$data$X}.}
 }
 
 For optimization, it uses the NSGA II algorithm (Deb et. al 2002) with mixed integer evolutionary
-strategies (Li et al. 2013).
+strategies (Li et al. 2013) and some tailored adjustments for the counterfactual search (Dandl et al. 2020).
+Default values for the hyperparameters are based on Dandl et al. 2020.
 }
 \details{
 Several population initialization strategies are available:
@@ -32,6 +33,11 @@ in \code{predictor$data$X}; if not enough non-dominated data points are availabl
 are initialized by random sampling. Subsequently, some features values are randomly reset to their initial value
 in \code{x_interest} (as for \code{random}).}
 }
+
+If \code{use_conditional_mutator} is set to TRUE, a conditional mutator samples
+feature values from the conditional distribution given the other feature values
+with the help of transformation trees (Hothorn and Zeileis 2017).
+For details see Dandl et al. 2020.
 }
 \examples{
 \dontrun{
@@ -64,6 +70,8 @@ Statistical Learning with Plots of Individual Conditional Expectation." Journal 
 Statistics 24 (1): 44–65. https: //doi.org/10.1080/10618600.2014.907095.
 
 Gower, J. C. (1971), "A general coefficient of similarity and some of its properties". Biometrics, 27, 623–637.
+
+Hothorn, T., Zeileis, A. (2017), "Transformation Forests". Technical Report, arXiv 1701.02110, https://arxiv.org/abs/1701.02110.
 
 Li, Rui, Michael T. M. Emmerich, Jeroen Eggermont, Thomas Bäck, M. Schütz, J. Dijkstra, and J. H. C. Reiber. 2013.
 "Mixed Integer Evolution Strategies for Parameter Optimization." Evolutionary Computation 21 (1): 29–64. https:
@@ -111,19 +119,19 @@ Create a new \code{MOCRegr} object.
   max_changed = NULL,
   mu = 20L,
   n_generations = 175L,
-  p_rec = 0.57,
-  p_rec_gen = 0.85,
-  p_rec_use_orig = 0.88,
-  p_mut = 0.79,
-  p_mut_gen = 0.56,
-  p_mut_use_orig = 0.32,
+  p_rec = 0.66,
+  p_rec_gen = 0.73,
+  p_mut = 0.8,
+  p_mut_gen = 0.71,
+  p_mut_use_orig = 0.26,
   k = 1L,
   weights = NULL,
   lower = NULL,
   upper = NULL,
   init_strategy = "random",
   use_conditional_mutator = FALSE,
-  quiet = FALSE
+  quiet = FALSE,
+  distance_function = NULL
 )}\if{html}{\out{</div>}}
 }
 
@@ -150,22 +158,19 @@ The population size. Default is \code{20L}.}
 The number of generations. Default is \code{175L}.}
 
 \item{\code{p_rec}}{(\code{numeric(1)})\cr
-Probability with which an individual is selected for recombination. Default is \code{0.57}.}
+Probability with which an individual is selected for recombination. Default is \code{0.66}.}
 
 \item{\code{p_rec_gen}}{(\code{numeric(1)})\cr
-Probability with which a feature/gene is selected for recombination. Default is \code{0.85}.}
-
-\item{\code{p_rec_use_orig}}{(\code{numeric(1)})\cr
-Probability with which a feature/gene is reset to its original value in \code{x_interest} after recombination. Default is \code{0.88}.}
+Probability with which a feature/gene is selected for recombination. Default is \code{0.73}.}
 
 \item{\code{p_mut}}{(\code{numeric(1)})\cr
-Probability with which an individual is selected for mutation. Default is \code{0.79}.}
+Probability with which an individual is selected for mutation. Default is \code{0.8}.}
 
 \item{\code{p_mut_gen}}{(\code{numeric(1)})\cr
-Probability with which a feature/gene is selected for mutation. Default is \code{0.56}.}
+Probability with which a feature/gene is selected for mutation. Default is \code{0.71}.}
 
 \item{\code{p_mut_use_orig}}{(\code{numeric(1)})\cr
-Probability with which a feature/gene is reset to its original value in \code{x_interest} after mutation. Default is \code{0.32}.}
+Probability with which a feature/gene is reset to its original value in \code{x_interest} after mutation. Default is \code{0.26}.}
 
 \item{\code{k}}{(\code{integerish(1)})\cr
 The number of data points to use for the forth objective. Default is \code{1L}.}
@@ -195,6 +200,11 @@ on the values of the other feature. Default is \code{FALSE}.}
 
 \item{\code{quiet}}{(\code{logical(1)})\cr
 Should information about the optimization status be hidden? Default is \code{FALSE}.}
+
+\item{\code{distance_function}}{(\verb{function()} | \code{NULL})\cr
+The distance function to be used in the second and fourth objective. The function must have three arguments:
+\code{x}, \code{y}, and \code{data} and return a \code{numeric} matrix with \code{nrow(x)} rows and \code{nrow(y)} columns.
+If set to \code{NULL} (default), then Gower distance (Gower 1971) is used.}
 }
 \if{html}{\out{</div>}}
 }
@@ -246,7 +256,7 @@ Visualizes two selected objective values of all emerged individuals in a scatter
 \if{html}{\out{<div class="arguments">}}
 \describe{
 \item{\code{objectives}}{(\code{character(2)})\cr
-The two objectives to be shown in the plot. Possible values are "dist_target", "dist_x_interest, "nr_changed",
+The two objectives to be shown in the plot. Possible values are "dist_target", "dist_x_interest, "no_changed",
 and "dist_train".}
 }
 \if{html}{\out{</div>}}

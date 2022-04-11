@@ -8,7 +8,7 @@
 
 # evaluate returns error if measures are not known
 
-    Assertion on 'measures' failed: Must be a subset of set {dist_x_interest,dist_target,nr_changed,dist_train}.
+    Assertion on 'measures' failed: Must be a subset of set {dist_x_interest,dist_target,no_changed,dist_train}.
 
 # methods that require at least one counterfactuals are blocked when no counterfactuals found
 
@@ -25,4 +25,12 @@
 ---
 
     Assertion on 'self$data' failed: Must have at least 1 rows, but has 0 rows.
+
+# distance_function can be exchanged
+
+    Assertion on 'value' failed: Must be a function, not 'data.frame'.
+
+---
+
+    `distance_function` must return a `numeric` matrix with `nrow(x)` rows and `nrow(y)` columns.
 

@@ -94,16 +94,16 @@ xtrue = dt[role == "true_cf", ]
 dint = rbindlist(map(seq_len(nrow(xint)), function(i) {
     xc = xint[i,]
     # Compare interest to others
-    dx = dt[, gow := gower(xc, .SD, vars), .SDcols = vars][idx == xc$idx,]
+    dx = dt[, gow := t(gower(xc, .SD, vars)), .SDcols = vars][idx == xc$idx,]
     d_int_true = mean(dx[role == "true_cf",]$gow)
     d_int_gen  = mean(dx[role == "gen_cf" & sex == xc$sex,]$gow)
     d_int_near = mean(dx[role == "x_nearest",]$gow)
     # d_int_flip = mean(dx[role == "a_flipped",]$gow)
-    d_int_rnd  = mean(dtg[, gow := gower(xc, .SD, vars), .SDcols = vars]$gow)
+    d_int_rnd  = mean(dtg[, gow := t(gower(xc, .SD, vars)), .SDcols = vars]$gow)
 
     # Compare true to others
     xtr = xtrue[i,]
-    dtr = dt[, gow := gower(xtr, .SD, vars), .SDcols = vars][idx == xc$idx,]
+    dtr = dt[, gow := t(gower(xtr, .SD, vars)), .SDcols = vars][idx == xc$idx,]
     d_true_gen  = min(dtr[role == "gen_cf" & sex == xtr$sex,]$gow)
     return(list(d_int_true, d_int_gen, d_int_rnd, d_true_gen, d_int_near, xc$idx))
 }))
@@ -126,15 +126,26 @@ p = ggplot(dout) +
   geom_path(aes(x = variable, y = value, group = idx), color = "darkgrey") +
   theme_bw() +
   xlab("") + 
-  ylab("x - x'") +
-  scale_x_discrete(labels = c("gen_cf", "true_cf")) +
+  ylab("icuf") +
+  scale_x_discrete(labels = c("generated", "true")) +
   theme(
       axis.text.x = element_text(size = 14),
       axis.text.y = element_text(size = 14),
       axis.title = element_text(size = 16)
   )
 
+
 ggsave("comp_icuf.pdf", p, scale = .7)
+
+p = ggplot(out) + 
+  geom_point(aes(x = gen, y = true)) +
+  theme_bw() +
+  xlab("icuf(true)") + 
+  ylab("icuf(generated)'") +
+  geom_abline(slope = 1, color = "darkblue") +
+  scale_x_discrete(labels = c("gen_cf", "true_cf"))
+p
+ggsave("comp_icuf_2.pdf", p, scale = .7)
 
  # Reported gcuf: 
 colMeans(abs(out))

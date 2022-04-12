@@ -150,4 +150,22 @@ make_cf_train_pop_initializer =  function(ps, x_interest, max_changed, protected
 }
 }
 
+plot_paretofront = function(cfactuals, highlight_target = FALSE) {
+  assert_logical(highlight_target)
+  data = cfactuals$evaluate()
+  if (highlight_target) {
+    plt = ggplot2::ggplot(data, aes(x = dist_x_interest, y = dist_train, color = as.factor(dist_target == 0))) +
+      ggplot2::geom_point(aes(size = no_changed)) +
+      ggplot2::theme_bw() +
+      guides(size = guide_legend(title="no_changed"), color = guide_legend(title = "dist_target == 0"))
+  } else {
+    plt = ggplot2::ggplot(data, aes(x = dist_x_interest, y = dist_train, color = no_changed)) +
+      ggplot2::geom_point() +
+      ggplot2::theme_bw() +
+      ggplot2::scale_color_gradient(low = "blue", high = "orange") +
+      ggplot2::guides(color=guide_legend(title="no_changed"))
+  }
+  
+  return(plt)
+}
 

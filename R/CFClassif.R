@@ -40,17 +40,15 @@ CFClassif = R6::R6Class("CFClassif", inherit = CounterfactualMethodClassif,
     #' @param n_generations (`integerish(1)`)\cr  
     #'   The number of generations. Default is `175L`.   
     #' @param p_rec (`numeric(1)`)\cr  
-    #'   Probability with which an individual is selected for recombination. Default is `0.57`.
+    #'   Probability with which an individual is selected for recombination. Default is `0.66`.
     #' @param p_rec_gen (`numeric(1)`)\cr  
-    #'   Probability with which a feature/gene is selected for recombination. Default is `0.85`.  
-    #' @param p_rec_use_orig (`numeric(1)`)\cr  
-    #'   Probability with which a feature/gene is reset to its original value in `x_interest` after recombination. Default is `0.88`.    
+    #'   Probability with which a feature/gene is selected for recombination. Default is `0.73`.  
     #' @param p_mut (`numeric(1)`)\cr  
-    #'   Probability with which an individual is selected for mutation. Default is `0.79`.    
+    #'   Probability with which an individual is selected for mutation. Default is `0.8`.    
     #' @param p_mut_gen (`numeric(1)`)\cr  
-    #'   Probability with which a feature/gene is selected for mutation. Default is `0.56`.   
+    #'   Probability with which a feature/gene is selected for mutation. Default is `0.71`.   
     #' @param p_mut_use_orig (`numeric(1)`)\cr  
-    #'   Probability with which a feature/gene is reset to its original value in `x_interest` after mutation. Default is `0.32`.    
+    #'   Probability with which a feature/gene is reset to its original value in `x_interest` after mutation. Default is `0.26`.      
     #' @param k (`integerish(1)`)\cr  
     #'   The number of data points to use for the forth objective. Default is `1L`.
     #' @param weights (`numeric(1) | numeric(k)` | `NULL`)\cr  
@@ -67,8 +65,8 @@ CFClassif = R6::R6Class("CFClassif", inherit = CounterfactualMethodClassif,
     #' @param quiet (`logical(1)`)\cr 
     #'  Should information about the optimization status be hidden? Default is `FALSE`.
     initialize = function(predictor, protected = NULL, epsilon = NULL, fixed_features = NULL, max_changed = NULL, mu = 20L, 
-                          n_generations = 175L, p_rec = 0.57, p_rec_gen = 0.85, p_rec_use_orig = 0.88, p_mut = 0.79, 
-                          p_mut_gen = 0.56, p_mut_use_orig = 0.32, k = 1L, weights = NULL, lower = NULL, upper = NULL, 
+                          n_generations = 175L, p_rec = 0.66, p_rec_gen = 0.73, p_mut = 0.80, 
+                          p_mut_gen = 0.71, p_mut_use_orig = 0.26, k = 1L, weights = NULL, lower = NULL, upper = NULL, 
                           init_strategy = "random", use_conditional_mutator = FALSE, quiet = FALSE) {
 
                             
@@ -84,7 +82,6 @@ CFClassif = R6::R6Class("CFClassif", inherit = CounterfactualMethodClassif,
       assert_integerish(n_generations, lower = 0, len = 1L)
       assert_number(p_rec, lower = 0, upper = 1)
       assert_number(p_rec_gen, lower = 0, upper = 1)
-      assert_number(p_rec_use_orig, lower = 0, upper = 1)
       assert_number(p_mut, lower = 0, upper = 1)
       assert_number(p_mut_gen, lower = 0, upper = 1)
       assert_number(p_mut_use_orig, lower = 0, upper = 1)
@@ -126,7 +123,6 @@ CFClassif = R6::R6Class("CFClassif", inherit = CounterfactualMethodClassif,
       private$n_generations = n_generations
       private$p_rec = p_rec
       private$p_rec_gen = p_rec_gen
-      private$p_rec_use_orig = p_rec_use_orig
       private$p_mut = p_mut
       private$p_mut_gen = p_mut_gen
       private$p_mut_use_orig = p_mut_use_orig
@@ -173,7 +169,7 @@ CFClassif = R6::R6Class("CFClassif", inherit = CounterfactualMethodClassif,
     
     #' @description Visualizes two selected objective values of all emerged individuals in a scatter plot.
     #' @param objectives (`character(2)`)\cr  
-    #'   The two objectives to be shown in the plot. Possible values are "dist_target", "dist_x_interest, "nr_changed", 
+    #'   The two objectives to be shown in the plot. Possible values are "dist_target", "dist_x_interest, "no_changed", 
     #'   and "dist_train".
     plot_search = function(objectives = c("dist_target", "dist_x_interest")) {
       if (!requireNamespace("ggplot2", quietly = TRUE)) {
@@ -182,7 +178,7 @@ CFClassif = R6::R6Class("CFClassif", inherit = CounterfactualMethodClassif,
       if (is.null(self$optimizer)) {
         stop("There are no results yet. Please run `$find_counterfactuals` first.")
       }
-      assert_names(objectives, subset.of = c("dist_target", "dist_x_interest", "nr_changed", "dist_train"))
+      assert_names(objectives, subset.of = c("dist_target", "dist_x_interest", "no_changed", "dist_train"))
       make_moc_search_plot(self$optimizer$archive$data, objectives)
     },
     
@@ -275,7 +271,6 @@ CFClassif = R6::R6Class("CFClassif", inherit = CounterfactualMethodClassif,
     n_generations = NULL,
     p_rec = NULL,
     p_rec_gen = NULL,
-    p_rec_use_orig = NULL,
     p_mut = NULL,
     p_mut_gen = NULL,
     p_mut_use_orig = NULL,
@@ -337,7 +332,6 @@ CFClassif = R6::R6Class("CFClassif", inherit = CounterfactualMethodClassif,
         n_generations = private$n_generations,
         p_rec = private$p_rec,
         p_rec_gen = private$p_rec_gen,
-        p_rec_use_orig = private$p_rec_use_orig,
         p_mut = private$p_mut,
         p_mut_gen = private$p_mut_gen,
         p_mut_use_orig = private$p_mut_use_orig,
@@ -365,7 +359,6 @@ CFClassif = R6::R6Class("CFClassif", inherit = CounterfactualMethodClassif,
       cat(" - p_mut_use_orig: ", private$p_mut_use_orig, "\n")
       cat(" - p_rec: ", private$p_rec, "\n")
       cat(" - p_rec_gen: ", private$p_rec_gen, "\n")
-      cat(" - p_rec_use_orig: ", private$p_rec_use_orig, "\n")
       cat(" - upper: ", private$upper)
       cat(" - weights: ", private$weights, "\n")
     }

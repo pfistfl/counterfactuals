@@ -150,22 +150,42 @@ make_cf_train_pop_initializer =  function(ps, x_interest, max_changed, protected
 }
 }
 
-plot_paretofront = function(cfactuals, highlight_target = FALSE) {
-  assert_logical(highlight_target)
+# plot_paretofront = function(cfactuals, mode = NULL) {
+#   assert_choice(mode, c("highlight_target", "3d", "2dall"), null.ok = TRUE)
+#   data = cfactuals$evaluate()
+#   data$pred = 1 - cfactuals$predict()[,cfactuals$desired$desired_class]
+#   if (!is.null(mode)) {
+#     if (mode == "highlight_target") {
+#       plt = ggplot2::ggplot(data, aes(x = dist_x_interest, y = dist_train, color = (pred <= 0.5))) +
+#         ggplot2::geom_point() +
+#         ggplot2::theme_bw() +
+#         guides(size = guide_legend(title="no_changed"), color = guide_legend(title = "dist_target == 0"))
+#     } else if (mode == "3d") {
+#       plt = plotly::plot_ly(data = data, x = ~pred, y = ~dist_x_interest, z = ~dist_train, type = "scatter3d", size = 0.5) %>% 
+#         plotly::layout(scene = list(xaxis = list(title = "dist_target")))
+#     } else if (mode == "2dall") {
+#       browser()
+#       plt = ggplot2::ggplot(data, aes(x = dist_x_interest, y = dist_train, color = pred)) +
+#         ggplot2::geom_point() +
+#         ggplot2::theme_bw() +
+#         guides(color = guide_legend(title=expression(o[1])))
+#     }
+#   } else {
+#     plt = ggplot2::ggplot(data, aes(x = dist_x_interest, y = dist_train)) +
+#       ggplot2::geom_point() +
+#       ggplot2::theme_bw()
+#   }
+#   
+#   return(plt)
+# }
+
+plot_paretofront = function(cfactuals, objectives = c("dist_target", "dist_x_interest", "dist_train")) {
   data = cfactuals$evaluate()
-  if (highlight_target) {
-    plt = ggplot2::ggplot(data, aes(x = dist_x_interest, y = dist_train, color = as.factor(dist_target == 0))) +
-      ggplot2::geom_point(aes(size = no_changed)) +
-      ggplot2::theme_bw() +
-      guides(size = guide_legend(title="no_changed"), color = guide_legend(title = "dist_target == 0"))
-  } else {
-    plt = ggplot2::ggplot(data, aes(x = dist_x_interest, y = dist_train, color = no_changed)) +
-      ggplot2::geom_point() +
-      ggplot2::theme_bw() +
-      ggplot2::scale_color_gradient(low = "blue", high = "orange") +
-      ggplot2::guides(color=guide_legend(title="no_changed"))
+  if ("dist_target" %in% objectives) {
+    data$dist_target = 1 - cfactuals$predict()[,cfactuals$desired$desired_class]
   }
-  
-  return(plt)
+  ggplot2::ggplot(data, ggplot2::aes_string(x = objectives[1], y = objectives[2], color = objectives[3])) +
+    ggplot2::geom_point() +
+    ggplot2::theme_bw()
 }
 

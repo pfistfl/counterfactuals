@@ -10,7 +10,7 @@ library("dplyr")
 devtools::load_all()
 source("paper/experiments/metrics.R")
 SEED = 202201L
-generations = 175L #<FIXME>:30L
+generations = 175L
 
 
 ## Fit random forest predictor
@@ -39,12 +39,8 @@ cf_classif = CFClassif$new(predictor, protected = "race", n_generations = genera
 cfactuals = cf_classif$find_counterfactuals(
   x_interest = x_interest, desired_class = "White", desired_prob = c(0.5, 1)
 )
-pfront = plot_paretofront(cfactuals)
-pfront2 = plot_paretofront(cfactuals, highlight_target = TRUE)
-
-cfactuals$subset_to_valid()
-
-pfront3 = plot_paretofront(cfactuals)
+paretoplot1 = plot_paretofront(cfactuals)
+ggsave(filename = "paretofront_adult.pdf", plot = paretoplot1, width = 6, height = 3.5)
 
 set.seed(SEED)
 ptnse = plot_counterfactuals(cfactuals, data, attribute = "race")

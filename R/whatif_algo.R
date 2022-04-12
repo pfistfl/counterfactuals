@@ -1,5 +1,11 @@
-whatif_algo = function(predictor, n_cfactuals, x_interest, pred_column, desired_y_hat_range, X_search) {
-
+whatif_algo = function(predictor, n_cfactuals, fixed_features, x_interest, pred_column, desired_y_hat_range, X_search) {
+  
+  if (!is.null(fixed_features)) {
+    for (ff in fixed_features) {
+      row_id = c(X_search[, ff, with = FALSE] == c(x_interest[, ff, with = FALSE])) 
+      X_search = X_search[row_id]
+    }
+  }
   y_hat = setDT(predictor$predict(X_search))[[pred_column]]
   X_search = X_search[y_hat %between% desired_y_hat_range]
   X_search = unique(X_search)

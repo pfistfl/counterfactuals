@@ -43,10 +43,14 @@ WhatIfClassif = R6::R6Class("WhatIfClassif", inherit = CounterfactualMethodClass
     #' @param n_counterfactuals (`integerish(1)`)\cr
     #'   The number of counterfactuals to return. Default is `1L`.
     #' @template lower_upper
-    initialize = function(predictor, n_counterfactuals = 1L, lower = NULL, upper = NULL) {
+    initialize = function(predictor, n_counterfactuals = 1L, fixed_features = NULL, lower = NULL, upper = NULL) {
       super$initialize(predictor, lower, upper)
       assert_integerish(n_counterfactuals, lower = 1L, any.missing = FALSE, len = 1L)
+      if (!is.null(fixed_features)) {
+        assert_names(fixed_features, subset.of = private$predictor$data$feature.names)
+      }
       private$n_counterfactuals = n_counterfactuals
+      private$fixed_features = fixed_features
       X_search = private$predictor$data$X
       if (!is.null(lower)) {
         X_search = X_search[Reduce(`&`, Map(`>=`, X_search[, names(lower), with = FALSE], lower))]
@@ -63,13 +67,15 @@ WhatIfClassif = R6::R6Class("WhatIfClassif", inherit = CounterfactualMethodClass
   
   private = list(
     n_counterfactuals = NULL,
+    fixed_features = NULL,
     X_search = NULL,
     
     run = function() {
       pred_column = private$get_pred_column()
       whatif_algo(
         predictor = private$predictor, 
-        n_cfactuals = private$n_counterfactuals, 
+        n_cfactuals = private$n_counterfactuals,
+        fixed_features = private$fixed_features,
         x_interest = private$x_interest, 
         pred_column = pred_column, 
         desired_y_hat_range = private$desired_prob,

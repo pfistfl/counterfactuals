@@ -18,7 +18,7 @@ make_fitness_function_cf = function(predictor, predictor_protected, x_interest, 
     ranges = param_set$upper - param_set$lower
     prob_prot = 1 - as.data.table(predictor_protected$predict_newdata(xdt))[[pred_column]]
     dist_x_interest = as.vector(StatMatch::gower.dist(x_interest, xdt, rngs = ranges, KR.corr = FALSE))
-    dist_train = gower_topn(x = xdt, y = predictor$data$X, n = k)$distance
+    dist_train = gower::gower_topn(x = xdt, y = predictor$data$X, n = k)$distance
     if (!is.null(weights)) {
       dist_train = apply(dist_train, 2L, weighted.mean, w = weights)
     } else {

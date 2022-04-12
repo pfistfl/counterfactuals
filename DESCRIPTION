@@ -54,4 +54,6 @@ Roxygen: list(markdown = TRUE)
 Config/testthat/edition: 3
 Remotes:
     mlr-org/miesmuschel@multiobjective_hb,
-    katokohaku/featureTweakR
+    katokohaku/featureTweakR,
+    mlr-org/bbotk@paper_2021_hyperband
+    mlr-org/paradox

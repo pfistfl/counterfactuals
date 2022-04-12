@@ -4,7 +4,7 @@ library("mlr3misc")
 gower = function(x, y, vars) {
     y = y[, vars, with = FALSE]
     x = x[, vars, with = FALSE]
-    gower_dist(x,y)
+    gower_dist(x,y, y)
 }
 
 l0 = function(x, y, vars) {

@@ -7,6 +7,7 @@ library("gower")
 library("randomForest")
 library("data.table")
 library("dplyr")
+library("ggplot2")
 devtools::load_all()
 source("paper/experiments/metrics.R")
 SEED = 202201L
@@ -39,8 +40,12 @@ cf_classif = CFClassif$new(predictor, protected = "race", n_generations = genera
 cfactuals = cf_classif$find_counterfactuals(
   x_interest = x_interest, desired_class = "White", desired_prob = c(0.5, 1)
 )
-paretoplot1 = plot_paretofront(cfactuals)
-ggsave(filename = "paretofront_adult.pdf", plot = paretoplot1, width = 6, height = 3.5)
+paretoplot1 = plot_paretofront(cfactuals) 
+paretoplot1 = paretoplot1 + 
+  xlab(expression(o[valid])) + 
+  ylab(expression(o[close])) +
+  labs(color=expression(o[plaus])) 
+# ggsave(filename = "paper/experiments/adult/paretofront_adult.pdf", plot = paretoplot1, width = 4, height = 2.5)
 
 set.seed(SEED)
 ptnse = plot_counterfactuals(cfactuals, data, attribute = "race")
@@ -49,9 +54,3 @@ ptnse
 
 # Average change in prediction
 mean(predictor$predict(cfactuals$data)[,1] - predictor$predict(data[150L,])[,1])
-
-# probs = predictor$predict(out)
-# out[, prob0 := probs[,1]]
-# out[, prob1 := probs[,2]]
-# out$idx = idx
-# return(out)
